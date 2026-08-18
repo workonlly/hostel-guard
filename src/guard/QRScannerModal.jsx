@@ -10,9 +10,48 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
   const html5QrCodeRef = useRef(null);
   const scannerContainerId = "qr-reader-container";
 
-  // Initialize and list cameras when modal opens
+  const stopScanner = async () => {
+    const scanner = html5QrCodeRef.current;
+    html5QrCodeRef.current = null;
+    setIsScanning(false);
+
+    if (scanner) {
+      try {
+        if (scanner.isScanning) {
+          await scanner.stop();
+        }
+        scanner.clear();
+      } catch (err) {
+        // Ignore stop errors on unmount
+      }
+    }
+  };
+
+  const handleClose = () => {
+    stopScanner().catch(() => {});
+    onClose();
+  };
+
+  // Close on Escape key press
   useEffect(() => {
     if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen]);
+
+  // Initialize and list cameras when modal opens
+  useEffect(() => {
+    if (!isOpen) {
+      stopScanner().catch(() => {});
+      return;
+    }
 
     setErrorMsg("");
     let isMounted = true;
@@ -46,7 +85,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
 
     return () => {
       isMounted = false;
-      stopScanner();
+      stopScanner().catch(() => {});
     };
   }, [isOpen]);
 
@@ -69,9 +108,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
         (decodedText) => {
           handleDecodedText(decodedText);
         },
-        (errorMessage) => {
-          // Ignore frequent frame-read failure ticks
-        }
+        () => {}
       );
       setIsScanning(true);
       setErrorMsg("");
@@ -82,37 +119,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
     }
   };
 
-  const stopScanner = async () => {
-    try {
-      if (html5QrCodeRef.current && isScanning) {
-        await html5QrCodeRef.current.stop();
-        html5QrCodeRef.current.clear();
-      }
-    } catch (err) {
-      // Ignore stop errors on unmount
-    } finally {
-      html5QrCodeRef.current = null;
-      setIsScanning(false);
-    }
-  };
-
   const handleDecodedText = async (text) => {
     if (!text) return;
     try {
-      // Play confirmation beep using Web Audio API
-      try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.value = 880; // A5 tone
-        gain.gain.value = 0.15;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.12);
-      } catch (e) {}
-
+      // Beep sound removed as requested
       await stopScanner();
       onScanSuccess(text);
     } catch (err) {
@@ -137,8 +147,18 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4 animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col relative">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-3 sm:p-4 animate-in fade-in duration-200"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-gray-200 flex flex-col relative"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center gap-3">
@@ -155,11 +175,10 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
             </div>
           </div>
           <button
-            onClick={() => {
-              stopScanner();
-              onClose();
-            }}
-            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 flex items-center justify-center text-sm font-bold transition cursor-pointer"
+            type="button"
+            onClick={handleClose}
+            aria-label="Close"
+            className="w-9 h-9 rounded-full bg-gray-100 hover:bg-red-50 hover:text-red-700 text-gray-600 flex items-center justify-center text-base font-bold transition cursor-pointer"
           >
             ✕
           </button>
@@ -176,6 +195,7 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
                 <p className="text-xs font-medium">Camera standby</p>
                 {cameras.length > 0 && (
                   <button
+                    type="button"
                     onClick={() => startScanner(selectedCameraId || cameras[0].id)}
                     className="px-4 py-2 bg-[#6d0f16] text-white text-xs font-bold rounded-xl hover:bg-[#560c12] transition cursor-pointer"
                   >
@@ -232,6 +252,17 @@ export default function QRScannerModal({ isOpen, onClose, onScanSuccess }) {
                 Look up
               </button>
             </form>
+          </div>
+
+          {/* Bottom Close Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-full py-2.5 text-xs font-bold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer"
+            >
+              Cancel / Close Scanner
+            </button>
           </div>
         </div>
       </div>
