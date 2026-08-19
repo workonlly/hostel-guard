@@ -10,6 +10,16 @@ The high-throughput, offline-resilient gate security terminal for **NIT Hamirpur
 
 ---
 
+### 🌐 Related Repositories in the NITH Ecosystem
+
+| Repository | Description | Live GitHub Link |
+| :--- | :--- | :--- |
+| **`hostel-backend`** | Core REST API Gateway & PostgreSQL Database Engine | [🔗 github.com/workonlly/hostel-backend](https://github.com/workonlly/hostel-backend) |
+| **`hostel-frontend`** | Student Web Application (Registration, Outpass Forms & Dynamic QR Gate Pass) | [🔗 github.com/workonlly/hostel-frontend](https://github.com/workonlly/hostel-frontend) |
+| **`hostel-authority`** | Authority & Administration Portal (Chief Warden, Warden & Attendant Dashboards) | [🔗 github.com/workonlly/hostel-authority](https://github.com/workonlly/hostel-authority) |
+
+---
+
 ## 📑 Table of Contents
 
 - [Offline-First Architecture](#-offline-first-architecture)
