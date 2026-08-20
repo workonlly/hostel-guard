@@ -46,8 +46,14 @@ export async function apiFetch(
     err.data = data;
     err.status = response.status;
 
-    // Dispatch global event if device is revoked or mismatched
-    if (response.status === 403 || response.status === 401) {
+    // Dispatch global event only if device is specifically revoked or session token is invalid
+    const errReason = data?.reason || "";
+    const errMsg = (data.message || data.error || "").toLowerCase();
+    const isDeviceRevokedOrInvalid =
+      (response.status === 403 && (errReason === "DEVICE_REVOKED" || errMsg.includes("deactivated/revoked") || errMsg.includes("disabled by the chief warden"))) ||
+      (response.status === 401 && (errReason === "TOKEN_MISMATCH" || errReason === "DEVICE_NOT_FOUND" || errMsg.includes("invalid device session") || errMsg.includes("unrecognized device")));
+
+    if (isDeviceRevokedOrInvalid) {
       window.dispatchEvent(new CustomEvent("guard-device-auth-error", { detail: data }));
     }
 

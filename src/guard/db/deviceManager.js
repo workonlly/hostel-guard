@@ -143,12 +143,13 @@ export const deviceManager = {
    * Verify device status with server
    */
   async verifyWithServer() {
-    const { deviceId, deviceToken, hostelId: prevHostelId, guardType: prevGuardType } = this.getDeviceInfo();
+    const { deviceId, deviceToken, fingerprintHash: savedFpHash, hostelId: prevHostelId, guardType: prevGuardType } = this.getDeviceInfo();
     if (!deviceId || !deviceToken) {
       return { isValid: false, reason: 'NO_CREDENTIALS', message: 'Terminal is not activated' };
     }
 
     const fp = await getDeviceFingerprint();
+    const fpHashToSend = savedFpHash || fp.fingerprintHash;
 
     try {
       const response = await fetch(`${BASE_URL}/api/guard/device/verify`, {
@@ -157,7 +158,7 @@ export const deviceManager = {
         body: JSON.stringify({
           device_id: deviceId,
           device_token: deviceToken,
-          fingerprint_hash: fp.fingerprintHash
+          fingerprint_hash: fpHashToSend
         })
       });
 

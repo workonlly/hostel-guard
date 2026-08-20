@@ -104,6 +104,17 @@ function getReadableDeviceInfo(webgl, screenSpecs) {
 }
 
 let cachedFingerprint = null;
+let fingerprintInitPromise = null;
+
+async function resolveVisitorId() {
+  try {
+    const fpAgent = await loadFingerprint();
+    const result = await fpAgent.get();
+    return result.visitorId || 'std-visitor';
+  } catch (e) {
+    return 'std-visitor';
+  }
+}
 
 /**
  * Main Function: Extract Full Device Fingerprint and Metadata
@@ -113,64 +124,59 @@ export async function getDeviceFingerprint(forceRefresh = false) {
     return cachedFingerprint;
   }
 
-  const webgl = getWebGLInfo();
-  const canvasHash = getCanvasFingerprint();
-
-  const screenSpecs = {
-    width: typeof window !== 'undefined' ? (window.screen?.width || 1920) : 1920,
-    height: typeof window !== 'undefined' ? (window.screen?.height || 1080) : 1080,
-    colorDepth: typeof window !== 'undefined' ? (window.screen?.colorDepth || 24) : 24,
-    pixelRatio: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
-  };
-
-  const hardwareSpecs = {
-    cores: typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4,
-    memory: typeof navigator !== 'undefined' ? (navigator.deviceMemory || 'unknown') : 'unknown',
-    touchPoints: typeof navigator !== 'undefined' ? (navigator.maxTouchPoints || 0) : 0,
-    language: typeof navigator !== 'undefined' ? (navigator.language || 'en') : 'en',
-    timeZone: typeof Intl !== 'undefined' ? (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC') : 'UTC',
-    platform: typeof navigator !== 'undefined' ? (navigator.platform || 'unknown') : 'unknown',
-  };
-
-  let fpVisitorId = 'native-' + hardwareSpecs.cores + 'c-' + screenSpecs.width;
-
-  try {
-    const fpPromise = Promise.race([
-      loadFingerprint().then(agent => agent.get()).then(res => res.visitorId),
-      new Promise(resolve => setTimeout(() => resolve(null), 200))
-    ]);
-    const result = await fpPromise;
-    if (result) fpVisitorId = result;
-  } catch (e) {
-    // Continue with native fallback
+  if (fingerprintInitPromise && !forceRefresh) {
+    return fingerprintInitPromise;
   }
 
-  const compositePayload = JSON.stringify({
-    fpVisitorId,
-    webglRenderer: webgl.renderer,
-    webglVendor: webgl.vendor,
-    canvasSig: (canvasHash || '').slice(-64),
-    cores: hardwareSpecs.cores,
-    memory: hardwareSpecs.memory,
-    screen: `${screenSpecs.width}x${screenSpecs.height}x${screenSpecs.colorDepth}`,
-    touch: hardwareSpecs.touchPoints,
-    platform: hardwareSpecs.platform,
-    timeZone: hardwareSpecs.timeZone
-  });
+  fingerprintInitPromise = (async () => {
+    const webgl = getWebGLInfo();
+    const canvasHash = getCanvasFingerprint();
 
-  const compositeHash = fastHash(compositePayload);
-  const readable = getReadableDeviceInfo(webgl, screenSpecs);
+    const screenSpecs = {
+      width: typeof window !== 'undefined' ? (window.screen?.width || 1920) : 1920,
+      height: typeof window !== 'undefined' ? (window.screen?.height || 1080) : 1080,
+      colorDepth: typeof window !== 'undefined' ? (window.screen?.colorDepth || 24) : 24,
+      pixelRatio: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
+    };
 
-  cachedFingerprint = {
-    fingerprintHash: compositeHash,
-    visitorId: fpVisitorId,
-    deviceInfo: {
-      ...readable,
-      hardwareSpecs,
-      screenDetails: screenSpecs,
-      webglDetails: webgl
-    }
-  };
+    const hardwareSpecs = {
+      cores: typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4,
+      memory: typeof navigator !== 'undefined' ? (navigator.deviceMemory || 'unknown') : 'unknown',
+      touchPoints: typeof navigator !== 'undefined' ? (navigator.maxTouchPoints || 0) : 0,
+      language: typeof navigator !== 'undefined' ? (navigator.language || 'en') : 'en',
+      timeZone: typeof Intl !== 'undefined' ? (Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC') : 'UTC',
+      platform: typeof navigator !== 'undefined' ? (navigator.platform || 'unknown') : 'unknown',
+    };
 
-  return cachedFingerprint;
+    const fpVisitorId = await resolveVisitorId();
+
+    // Core fingerprint uses stable hardware capabilities (not transient zoom or window sizes)
+    const compositePayload = JSON.stringify({
+      fpVisitorId,
+      webglRenderer: webgl.renderer,
+      webglVendor: webgl.vendor,
+      canvasSig: (canvasHash || '').slice(-64),
+      cores: hardwareSpecs.cores,
+      platform: hardwareSpecs.platform,
+      timeZone: hardwareSpecs.timeZone
+    });
+
+    const compositeHash = fastHash(compositePayload);
+    const readable = getReadableDeviceInfo(webgl, screenSpecs);
+
+    cachedFingerprint = {
+      fingerprintHash: compositeHash,
+      visitorId: fpVisitorId,
+      deviceInfo: {
+        ...readable,
+        hardwareSpecs,
+        screenDetails: screenSpecs,
+        webglDetails: webgl
+      }
+    };
+
+    return cachedFingerprint;
+  })();
+
+  return fingerprintInitPromise;
 }

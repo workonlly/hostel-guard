@@ -22,21 +22,30 @@ export default function DeviceGatekeeper({ children }) {
         setServerStatus(res);
         if (res && res.isValid) {
           setDeviceBound(true);
-        } else {
+        } else if (res && (res.reason === 'DEVICE_REVOKED' || res.reason === 'TOKEN_MISMATCH' || res.reason === 'DEVICE_NOT_FOUND')) {
           setDeviceBound(false);
-          if (res && res.message) setErrorMessage(res.message);
+          if (res.message) setErrorMessage(res.message);
+        } else {
+          // If offline or network issue, maintain device binding
+          setDeviceBound(deviceManager.isDeviceConfigured());
         }
       }).catch(err => {
         console.warn('Offline mode verification:', err.message);
+        setDeviceBound(deviceManager.isDeviceConfigured());
       }).finally(() => {
         setIsVerifying(false);
       });
     }
 
     const handleAuthError = (event) => {
-      if (event.detail?.message) {
-        setErrorMessage(event.detail.message);
-        setServerStatus({ isValid: false, reason: 'AUTH_ERROR', message: event.detail.message });
+      const reason = event.detail?.reason || '';
+      const isCriticalRevocation = reason === 'DEVICE_REVOKED' || reason === 'TOKEN_MISMATCH' || reason === 'DEVICE_NOT_FOUND';
+
+      if (isCriticalRevocation) {
+        if (event.detail?.message) {
+          setErrorMessage(event.detail.message);
+        }
+        setServerStatus({ isValid: false, reason: reason || 'AUTH_ERROR', message: event.detail?.message || 'Device session expired' });
         setDeviceBound(false);
       }
     };
